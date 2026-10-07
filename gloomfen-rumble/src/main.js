@@ -1,0 +1,12 @@
+import * as THREE from 'three';
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+document.getElementById('app').appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x1d3a44);
+const cam = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 100);
+cam.position.set(0, 1, 3);
+const m = new THREE.Mesh(new THREE.TorusKnotGeometry(0.6, 0.2, 100, 16), new THREE.MeshToonMaterial({ color: 0xd9a441 }));
+scene.add(m, new THREE.HemisphereLight(0xffffff, 0x223344, 2));
+renderer.setAnimationLoop((t) => { m.rotation.y = t / 1000; renderer.render(scene, cam); });
+window.__ok = true;
