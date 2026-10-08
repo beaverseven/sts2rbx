@@ -299,10 +299,15 @@ export async function installQA(page) {
         if (!near) near = all[0];
         nd = Math.hypot(near.position.x - P.x, near.position.z - P.z);
         // locked on something that cannot be hit (no line of sight) for 1.5 s: let go and look elsewhere
+        if (pl.lockTarget && i % 10 === 0) pl.lockTarget._qaLos = qa.los(pl.lockTarget);
         if (pl.lockTarget && pl.lockTarget._qaLos === false) { log.noLosSteps = (log.noLosSteps || 0) + 1; if ((pl._qaNoLos = (pl._qaNoLos || 0) + 1) > 90) { pl.lockTarget._qaIgnore = ctx.time.now + 6; pl._qaNoLos = 0; log.unlocks = (log.unlocks || 0) + 1; g.setInput({}); g.step(1); continue; } } else pl._qaNoLos = 0;
         const act = { enemies: all, area: o.area, safeGround: o.safeGround !== false, fire: 'none', lockAny: o.lockMode !== 'pick', aimAt: near, target: near, groundY: null };
+        // an unhittable bandit closer than the one we want would steal the lock: walk on first, lock later
+        let thief = null;
+        for (const e of ctx.entities.query('enemy')) if (e._qaIgnore > ctx.time.now && e !== near && Math.hypot(e.position.x - P.x, e.position.z - P.z) < nd - 1) thief = e;
+        if (thief && !(pl.lockTarget === near)) { act.lockAny = false; act.target = null; log.thiefSteps = (log.thiefSteps || 0) + 1; }
         if (o.lockMode === 'pick') act.target = (o.pick && o.pick(all)) || near;
-        const tgt = o.lockMode === 'pick' ? act.target : pl.lockTarget;
+        const tgt = o.lockMode === 'pick' ? act.target : act.lockAny ? pl.lockTarget : null;
         // lock bookkeeping: which target did the game pick, compared with the nearest one?
         if (pl.lockTarget && pl.lockTarget !== lastLock) {
           const lt = pl.lockTarget, dl = Math.hypot(lt.position.x - P.x, lt.position.z - P.z);
@@ -333,6 +338,7 @@ export async function installQA(page) {
           for (const e of ctx.entities.query('berry')) { const d = Math.hypot(e.position.x - P.x, e.position.z - P.z); if (d < bd) { bd = d; best = e; } }
           if (best && bd < 25) { act.goal = { x: best.position.x, z: best.position.z }; act.goalW = 9; }
         }
+        if (o.trace && i % o.trace === 0) (log.trace = log.trace || []).push({ t: r2(ctx.time.now), p: [r2(P.x), r2(P.z)], near: near.type + '@' + r2(nd), nearLos: near._qaLos, lock: pl.lockTarget ? pl.lockTarget.type : null, locking: pl.locking, lockAny: act.lockAny, thief: !!thief, goal: act.goal ? [r2(act.goal.x), r2(act.goal.z)] : null, fire: act.fire, tgt: tgt ? tgt.type : null });
         qa.act(act);
         log.steps++;
       }

@@ -46,7 +46,7 @@ export default async function (page, h) {
       const region = (e) => e.type !== 'boss' && e.position.z > 266 && e.position.z < 304 && Math.abs(e.position.x) < 32 && e.position.y < 11; // tower slingers: unreachable (qa-combat-towergrid)
       const list = () => ctx.enemies.list().filter(region);
       const n0 = list().map((e) => e.type);
-      const r = qa.encounter({ enemies: list, area: { x: 0, z: 287, r: 17 }, maxSteps: 60 * 150, heal: 2, jars: [{ x: 6, z: 297 }] });
+      const r = qa.encounter({ enemies: list, area: { x: 0, z: 287, r: 17 }, maxSteps: Number(window.__qaYardSteps || 60 * 150), heal: 2, jars: [{ x: 6, z: 297 }], trace: 60 });
       return { n0, ...r, hp: ctx.player.hp, deaths: qa.count('player:died') };
     });
     await shot('fort-02-yard-after');
@@ -56,10 +56,14 @@ export default async function (page, h) {
       const g = window.__game, ctx = g.ctx, qa = window.__qa, L = window.__lv;
       if (!ctx.flags.gateFortOpen) {
         // open the iron gate the real way: Anvil jar, iron throw at the gate
-        L.walkTo(6, 297, 0.4, 900); g.step(5);
-        L.walkTo(0, 300, 0.4, 600);
-        L.aim(0, 305); g.step(2);
-        for (let k = 0; k < 6 && !ctx.flags.gateFortOpen; k++) { g.setInput({ throw: true }); g.step(1); g.setInput({}); g.step(40); }
+        const jar = ctx.entities.query('tonic').find((e) => Math.hypot(e.position.x - 6, e.position.z - 297) < 1.5);
+        L.walkTo(4.5, 297, 0.4, 900);
+        for (let k = 0; k < 600 && jar && !jar.available; k++) g.step(1);
+        L.walkTo(6, 297, 0.3, 900); g.step(5);
+        L.walkTo(0, 301.5, 0.4, 600);
+        L.walkTo(0, 303.2, 0.3, 300);   // face the gate
+        for (let k = 0; k < 6 && !ctx.flags.gateFortOpen; k++) { L.aim(0, 306); g.setInput({ move: [0, 0.3], throw: true }); g.step(1); g.setInput({ move: [0, 0.3] }); g.step(40); }
+        g.setInput({}); g.step(2);
       }
       const gate = !!ctx.flags.gateFortOpen;
       ctx.player.heal(5);
@@ -67,12 +71,15 @@ export default async function (page, h) {
       L.walkTo(0, 313, 0.5, 600);
       const t0 = ctx.time.now;
       const lock = qa.evlog.find((x) => x.n === 'arena:lock');
-      const list = () => ctx.entities.list.filter((e) => e.def && e.def.arena === 'courtyard' && (e.tags.has('bandit')));
-      // the waves spawn in over time: keep fighting until the arena clears
-      const r = qa.encounter({ enemies: () => { const l = list(); return l.length ? l : ctx.enemies.list().filter((e) => e.position.z > 309 && e.position.z < 332 && Math.abs(e.position.x) < 16); }, area: { x: 0, z: 320, r: 12 }, maxSteps: 60 * 150, heal: 2, until: () => ctx.flags.arenaClear_courtyard });
-      // waves arrive with a delay; run again until clear
-      let r2 = null;
-      if (!ctx.flags.arenaClear_courtyard) { g.step(90); r2 = qa.encounter({ enemies: () => ctx.enemies.list().filter((e) => e.position.z > 309 && e.position.z < 332 && Math.abs(e.position.x) < 16), area: { x: 0, z: 320, r: 12 }, maxSteps: 60 * 120, heal: 2, until: () => ctx.flags.arenaClear_courtyard }); }
+      const list = () => ctx.enemies.list().filter((e) => e.position.z > 309 && e.position.z < 333 && Math.abs(e.position.x) < 16);
+      const rounds = [];
+      for (let k = 0; k < 8 && !ctx.flags.arenaClear_courtyard; k++) {
+        g.step(20);
+        const rr = qa.encounter({ enemies: list, area: { x: 0, z: 320, r: 11 }, maxSteps: 60 * 90, heal: 2, until: () => ctx.flags.arenaClear_courtyard });
+        if (rr.steps) rounds.push({ steps: rr.steps, kills: rr.kills, hits: rr.hits, oddPicks: rr.oddPicks, picks: rr.picks.map((p) => p.type + '@' + p.d + (p.los ? '' : '(noLOS)')), deaths: rr.deaths, left: rr.left });
+      }
+      const r = { rounds, waves: qa.evlog.filter((x) => x.n === 'arena:wave' || x.n === 'arena:clear').length };
+      const r2 = null;
       return { gate, locked: !!lock, ...r, r2, clear: !!ctx.flags.arenaClear_courtyard, secs: ctx.time.now - t0, hp: ctx.player.hp, deaths: qa.count('player:died') };
     });
     await shot('fort-03-court-after');
